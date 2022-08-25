@@ -1,30 +1,38 @@
-#include "detecting_depth.h"
+/**************************************************************
+ * Writer : HAN NU RIM
+ * Date : 2019.10.14 MON
+ * Input : Scan data(Lidar)
+ * Output : If (the width of each legs is between 5 - 20cm) and
+ *             (the distance of legs is under 50cm),
+ *          Turtlebot3 will recognize that data as human and follow it.
+ * ************************************************************/
+#include "people_following/detecting.h"
 
-void colorCallback(const sensor_msgs::Image::ConstPtr& msg)
+void sensorCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 {
-    for (int i = 0; i < msg->width; i++)
-    // leave between 0cm and 150cm data/convert to (x,y)
+    int     total_deg   = msg->angle_max / msg->angle_increment;
+    for (int i = 0; i < total_deg+1; i++)
+    // leave 0~1.5 data/convert to (x,y)
     {
-        float deg = (i - 319) * 45 / 320;
-        dist = (msg->data[LINE*STEP+2*i] + msg->data[LINE*STEP+2*i+1] * 256) * 0.1;
-        if(dist > 0 && dist < 150) {
-            s   = make_pair(dist * sin(deg*PI/180), dist * cos(deg*PI/180));
+        int deg = (i + 180) % (total_deg + 1);
+        if(msg->ranges[deg] && msg->ranges[deg] < 1.5) {
+            s   = make_pair(-1 * msg->ranges[deg] * sin(deg*PI/180), msg->ranges[deg] * cos(deg*PI/180));
             raw_data.push_back(s);
         }
     }
-    for(vector<int>::size_type i = 0; i < raw_data.size()-1; i++)
-    // clustering data by distance(10cm)/leave data that get 5~20cm width
+    for(vector<int>::size_type i = 0; i < raw_data.size(); i++)
+    // clustering data by distance(0.1)/leave data that get 0.05~0.2m width
     {
         dist = sqrt(pow(raw_data[i].first-raw_data[i+1].first, 2) +
                     pow(raw_data[i].second-raw_data[i+1].second, 2));
-        if (start_flag && dist < 5) {
+        if (start_flag && dist < 0.1) {
             s           = make_pair(raw_data[i].first,raw_data[i].second);
             start_flag  = false;
         }
-        else if (!start_flag && dist > 5) {
+        else if (!start_flag && dist > 0.1) {
             f = make_pair(raw_data[i].first,raw_data[i].second);
             double width = sqrt(pow(s.first-f.first,2) + pow(s.second-f.second,2));
-            if (width < 20 && width > 5) {
+            if (width < 0.2 && width > 0.05) {
                 c1       = make_pair(s, f);
                 clustered.push_back(pair<double, pair<pair<double, double>, pair<double, double> > >(width, c1));
             }
@@ -39,7 +47,7 @@ void colorCallback(const sensor_msgs::Image::ConstPtr& msg)
         f = make_pair((clustered[i+1].second.first.first + clustered[i+1].second.second.first) / 2,
                       (clustered[i+1].second.first.second + clustered[i+1].second.second.second) / 2);
         dist = sqrt(pow(s.first - f.first,2) + pow(s.second - f.second,2));
-        if (dist < 50) {
+        if (dist < 0.5) {
             p1 = make_pair(i,pair<double,double>((s.first+f.first)/2,(s.second+f.second)/2));
             total_p.push_back(p1);
         }
@@ -124,7 +132,7 @@ int main(int argc, char **argv)
 
     ROS_INFO("detecting start");
 
-    ros::Subscriber sub = nh.subscribe("/camera/depth/image_rect_raw", 1000, colorCallback);
+    ros::Subscriber sub = nh.subscribe("scan", 10, sensorCallback);
     ros::Publisher pub = nh.advertise<geometry_msgs::Twist>("cmd_vel", 10);
 
     ros::Rate r(1000);

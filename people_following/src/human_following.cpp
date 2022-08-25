@@ -6,7 +6,7 @@
  *             (the distance of legs is under 50cm),
  *          Turtlebot3 will recognize that data as human and follow it.
  * ************************************************************/
-#include "detecting.h"
+#include "people_following/detecting.h"
 
 void sensorCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 {
